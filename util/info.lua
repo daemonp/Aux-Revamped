@@ -48,8 +48,9 @@ function M.container_item(bag, slot)
 
         local texture, count, locked, quality, readable, lootable = GetContainerItemInfo(bag, slot) -- quality not working?
         local tooltip, tooltip_money = tooltip('bag', bag, slot)
-        local max_charges = max_item_charges(item_id)
-        local charges = max_charges and item_charges(tooltip)
+        -- Auto-detect charges from tooltip for any item, fall back to hardcoded max_charges
+        local charges = item_charges(tooltip)
+        local max_charges = max_item_charges(item_id) or charges  -- Use detected charges as max if not in hardcoded list
         local aux_quantity = charges or count
         return T.map(
             'item_id', item_id,
@@ -306,7 +307,7 @@ do
 				return max(1, charges) -- TODO kronos bug? should never be 0
 			end
 	    end
-	    return 1
+	    return nil  -- Return nil if no charges found (not a charged item)
 	end
 end
 

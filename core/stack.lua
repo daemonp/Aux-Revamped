@@ -51,9 +51,9 @@ function find_empty_slot()
 	end
 end
 
-function find_charge_item_slot()
+function find_charge_item_slot(target_charges)
 	for slot in info.inventory() do
-		if matching_item(slot) and charges(slot) == state.target_size then
+		if matching_item(slot) and charges(slot) == target_charges then
 			return slot
 		end
 	end
@@ -82,7 +82,7 @@ function process()
 		end
 	end
 	if charges(state.target_slot) then
-		state.target_slot = find_charge_item_slot()
+		state.target_slot = find_charge_item_slot(state.target_size)
 		return stop()
 	end
 	if stack_size(state.target_slot) > state.target_size then

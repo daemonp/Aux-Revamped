@@ -26,6 +26,15 @@ refresh = true
 
 selected_item = nil
 
+-- For charge items, the "stack size" is the item's charge count (not user-selectable).
+-- For regular items, it's the stack size slider value.
+function effective_stack_size()
+	if selected_item and selected_item.max_charges then
+		return selected_item.charge_count or selected_item.max_charges
+	end
+	return stack_size_slider:GetValue()
+end
+
 function get_default_settings()
 	return T.map('duration', aux.account_data.post_duration, 'start_price', 0, 'buyout_price', 0, 'hidden', false)
 end
@@ -113,10 +122,10 @@ function update_auction_listing(listing, records, reference)
 	local rows = T.acquire()
 	if selected_item then
 		local historical_value = history.value(selected_item.key)
-		local stack_size = stack_size_slider:GetValue()
+		local stack_size = effective_stack_size()
 		for _, record in records[selected_item.key] or T.empty do
-			local price_color = undercut(record, stack_size_slider:GetValue(), listing == 'bid') < reference and aux.color.red
-			local price = record.unit_price * (listing == 'bid' and record.stack_size / stack_size_slider:GetValue() or 1)
+			local price_color = undercut(record, effective_stack_size(), listing == 'bid') < reference and aux.color.red
+			local price = record.unit_price * (listing == 'bid' and record.stack_size / effective_stack_size() or 1)
 			tinsert(rows, T.map(
 				'cols', T.list(
 				T.map('value', record.own and aux.color.green(record.count) or record.count),
@@ -184,11 +193,11 @@ function price_update()
     if selected_item then
         local historical_value = history.value(selected_item.key)
         if get_bid_selection() or get_buyout_selection() then
-	        set_unit_start_price(undercut(get_bid_selection() or get_buyout_selection(), stack_size_slider:GetValue(), get_bid_selection()))
+	        set_unit_start_price(undercut(get_bid_selection() or get_buyout_selection(), effective_stack_size(), get_bid_selection()))
 	        unit_start_price_input:SetText(money.to_string(get_unit_start_price(), true, nil, nil, true))
         end
         if get_buyout_selection() then
-	        set_unit_buyout_price(undercut(get_buyout_selection(), stack_size_slider:GetValue()))
+	        set_unit_buyout_price(undercut(get_buyout_selection(), effective_stack_size()))
 	        unit_buyout_price_input:SetText(money.to_string(get_unit_buyout_price(), true, nil, nil, true))
         end
         start_price_percentage:SetText(historical_value and gui.percentage_historical(aux.round(get_unit_start_price() / historical_value * 100)) or '---')
@@ -200,9 +209,8 @@ function post_auctions()
 	if selected_item then
         local unit_start_price = get_unit_start_price()
         local unit_buyout_price = get_unit_buyout_price()
-        local stack_size = stack_size_slider:GetValue()
-        local stack_count
-        stack_count = stack_count_slider:GetValue()
+        local stack_size = effective_stack_size()
+        local stack_count = stack_count_slider:GetValue()
         local duration = UIDropDownMenu_GetSelectedValue(duration_dropdown)
 		local key = selected_item.key
 
@@ -252,9 +260,8 @@ function M.post_auctions_bind()
 	if selected_item then
         local unit_start_price = get_unit_start_price()
         local unit_buyout_price = get_unit_buyout_price()
-        local stack_size = stack_size_slider:GetValue()
-        local stack_count
-        stack_count = stack_count_slider:GetValue()
+        local stack_size = effective_stack_size()
+        local stack_count = stack_count_slider:GetValue()
         local duration = UIDropDownMenu_GetSelectedValue(duration_dropdown)
 		local key = selected_item.key
 
@@ -342,7 +349,12 @@ function update_item_configuration()
          else
 		unit_start_price_input:Show()
         unit_buyout_price_input:Show()
-        stack_size_slider:Show()
+        -- Hide stack size slider for charge items (charges are fixed, not selectable)
+        if selected_item.max_charges then
+            stack_size_slider:Hide()
+        else
+            stack_size_slider:Show()
+        end
         stack_count_slider:Show()
         deposit:Show()
         duration_dropdown:Show()
@@ -381,18 +393,21 @@ do
     local id = selected_item.item_id
     local unit_price = aux.account_data.merchant_sell[id]
     local stack_count = stack_count_slider:GetValue()
-    local stack_size = stack_size_slider:GetValue()
+    local stack_size = effective_stack_size()
 
-    local total_items = stack_count * stack_size
-    local total_price = unit_price and unit_price * total_items or nil
-    local formatted_unit = unit_price and money.to_string(unit_price, nil, nil, aux.color.text.enabled) or aux.color.text.enabled("?")
+    -- unit_price is per-charge (charge items) or per-item (regular items)
+    -- stack_size is charge count (charge items) or items per stack (regular items)
+    -- So unit_price * stack_size = price per auction item in both cases
+    local item_price = unit_price and unit_price * stack_size or nil
+    local total_price = item_price and item_price * stack_count or nil
+    local formatted_item = item_price and money.to_string(item_price, nil, nil, aux.color.text.enabled) or aux.color.text.enabled("?")
     local formatted_total = total_price and money.to_string(total_price, nil, nil, aux.color.text.enabled) or aux.color.text.enabled("No sell price")
 
     local text
-    if stack_size == 1 and stack_count == 1 then
-        text = formatted_unit
+    if stack_count == 1 then
+        text = formatted_item
     else
-        text = formatted_unit .. " / " .. formatted_total
+        text = formatted_item .. " / " .. formatted_total
     end
 
     vendor_price_label:SetText("Vendor Price: " .. text)
@@ -402,7 +417,7 @@ end
 
 do
     local stack_count = stack_count_slider:GetValue()
-    local stack_size = stack_size_slider:GetValue()
+    local stack_size = effective_stack_size()
     local unit_buyout_price = get_unit_buyout_price()
 
     local stack_price = unit_buyout_price and stack_size * unit_buyout_price or nil
@@ -427,7 +442,7 @@ do
     local id = selected_item.item_id
     local unit_vendor_price = aux.account_data.merchant_sell[id]
     local stack_count = stack_count_slider:GetValue()
-    local stack_size = stack_size_slider:GetValue()
+    local stack_size = effective_stack_size()
     local unit_buyout_price = get_unit_buyout_price()
 
     local total_units = stack_count * stack_size
@@ -482,6 +497,7 @@ end
 end
 
 function undercut(record, stack_size, stack)
+    if not stack_size or stack_size < 1 then stack_size = 1 end
     local price = ceil(record.unit_price * (stack and record.stack_size or stack_size))
     if not record.own then
 	    price = price - 1
@@ -489,15 +505,35 @@ function undercut(record, stack_size, stack)
     return price / stack_size
 end
 
-function quantity_update(maximize_count)
-    if selected_item then
-        local max_stack_count = selected_item.max_charges and selected_item.availability[stack_size_slider:GetValue()] or floor(selected_item.availability[0] / stack_size_slider:GetValue())
-        stack_count_slider:SetMinMaxValues(1, max_stack_count)
-        if maximize_count then
-            stack_count_slider:SetValue(max_stack_count)
+do
+    local updating_quantity = false
+    function quantity_update(maximize_count)
+        if updating_quantity then return end
+        updating_quantity = true
+        if selected_item then
+            local max_stack_count
+            if selected_item.max_charges then
+                -- For charge items: count how many items we have with this charge count
+                local charge_count = effective_stack_size()
+                max_stack_count = selected_item.availability[charge_count] or 0
+            else
+                -- For regular items: divide total by stack size
+                local slider_val = stack_size_slider:GetValue()
+                if slider_val > 0 then
+                    max_stack_count = floor(selected_item.availability[0] / slider_val)
+                else
+                    max_stack_count = 0
+                end
+            end
+            -- Ensure slider min <= max
+            stack_count_slider:SetMinMaxValues(1, max(1, max_stack_count))
+            if maximize_count then
+                stack_count_slider:SetValue(max(1, max_stack_count))
+            end
         end
+        updating_quantity = false
+        refresh = true
     end
-    refresh = true
 end
 
 function unit_vendor_price(item_key)
@@ -514,7 +550,10 @@ function unit_vendor_price(item_key)
                 ClickAuctionSellItemButton()
                 ClearCursor()
                 if auction_sell_item then
-                    return auction_sell_item.vendor_price / auction_sell_item.count
+                    -- For charge items, vendor_price is the full-charges price and count is 1
+                    -- Divide by max_charges to get per-charge price; for regular items divide by count
+                    local divisor = info.max_item_charges(item_info.item_id) or auction_sell_item.count
+                    return auction_sell_item.vendor_price / divisor
                 end
             end
         end
@@ -541,25 +580,28 @@ function update_item(item)
 
     hide_checkbox:SetChecked(settings.hidden)
 	
-	local ii = 1
 	if selected_item.max_charges then
+		-- For charge items: you cannot split charges, so there is no stack size choice.
+		-- Find the charge count of the items we have and lock to that.
+		local charge_count = selected_item.max_charges
 		for i = selected_item.max_charges, 1, -1 do
-			if selected_item.availability[i] > 0 then
-				stack_size_slider:SetMinMaxValues(1, i)
-				ii=i
+			if selected_item.availability[i] and selected_item.availability[i] > 0 then
+				charge_count = i
 				break
 			end
 		end
+		selected_item.charge_count = charge_count
+		-- Lock the slider to the charge count (hidden, but value used internally)
+		stack_size_slider:SetMinMaxValues(charge_count, charge_count)
+		stack_size_slider:SetValue(charge_count)
 	else
-		ii = min(selected_item.max_stack, selected_item.aux_quantity)
+		local ii = min(selected_item.max_stack, selected_item.aux_quantity)
 		stack_size_slider:SetMinMaxValues(1, min(selected_item.max_stack, selected_item.aux_quantity))
-	end
-		
-	if not aux.account_data.post_stack then	
-		stack_size_slider:SetValue(math.random(1,ii))
-	else
-		stack_size_slider:SetValue(aux.huge)
-		--stack_size_slider:SetValue(1)
+		if not aux.account_data.post_stack then	
+			stack_size_slider:SetValue(math.random(1,ii))
+		else
+			stack_size_slider:SetValue(aux.huge)
+		end
 	end
 
     quantity_update(true)
@@ -585,10 +627,17 @@ function update_inventory_records()
             if info.auctionable(item_info.tooltip, nil, true) and not item_info.lootable then
                 if not auctionable_map[item_info.item_key] then
                     local availability = T.acquire()
-                    for i = 0, 10 do
+                    -- Initialize availability for charge counts 0-50 (0 = non-charged items)
+                    for i = 0, 50 do
                         availability[i] = 0
                     end
-                    availability[charge_class] = item_info.count
+                    -- For charged items: each inventory slot counts as 1 item with X charges
+                    -- For regular items: charge_class is 0 and we count total stack size
+                    if item_info.charges then
+                        availability[charge_class] = 1
+                    else
+                        availability[charge_class] = item_info.count
+                    end
                     auctionable_map[item_info.item_key] = T.map(
 	                    'item_id', item_info.item_id,
 	                    'suffix_id', item_info.suffix_id,
@@ -604,8 +653,18 @@ function update_inventory_records()
                     )
                 else
                     local auctionable = auctionable_map[item_info.item_key]
-                    auctionable.availability[charge_class] = (auctionable.availability[charge_class] or 0) + item_info.count
+                    -- For charged items: add 1 per inventory slot (each slot = 1 postable item)
+                    -- For regular items: add stack count
+                    if item_info.charges then
+                        auctionable.availability[charge_class] = (auctionable.availability[charge_class] or 0) + 1
+                    else
+                        auctionable.availability[charge_class] = (auctionable.availability[charge_class] or 0) + item_info.count
+                    end
                     auctionable.aux_quantity = auctionable.aux_quantity + (item_info.charges or item_info.count)
+                    -- Track highest charge count seen for slider range
+                    if item_info.max_charges and (not auctionable.max_charges or item_info.max_charges > auctionable.max_charges) then
+                        auctionable.max_charges = item_info.max_charges
+                    end
                 end
             end
         end

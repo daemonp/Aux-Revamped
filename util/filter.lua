@@ -191,9 +191,9 @@ M.filters = {
 					if vendor_price then 
 						local charges = 1
 						if info.max_item_charges(auction_record.item_id) ~= nil then 
-							info.charges=info.max_item_charges(auction_record.item_id) 
+							charges = info.max_item_charges(auction_record.item_id) 
 						end
-						vendor_price= vendor_price/ charges 
+						vendor_price = vendor_price / charges 
 					 end
 				end
                 return vendor_price and vendor_price * auction_record.aux_quantity - auction_record.bid_price >= amount
@@ -211,9 +211,9 @@ M.filters = {
 					if vendor_price then 
 						local charges = 1
 						if info.max_item_charges(auction_record.item_id) ~= nil then 
-							info.charges=info.max_item_charges(auction_record.item_id) 
+							charges = info.max_item_charges(auction_record.item_id) 
 						end
-						vendor_price= vendor_price/ charges 
+						vendor_price = vendor_price / charges 
 					 end
 				end
                 return auction_record.buyout_price > 0 and vendor_price and vendor_price * auction_record.aux_quantity - auction_record.buyout_price >= amount

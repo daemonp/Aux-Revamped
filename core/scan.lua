@@ -43,12 +43,16 @@ do
 	end
 
 	function M.stop()
-		get_state().stopped = true
+		local state = get_state()
+		if not state then return end
+		state.stopped = true
 	end
 
 	function complete()
-		local on_complete = get_state().params.on_complete
-		scan_states[get_state().params.type] = nil
+		local state = get_state()
+		if not state then return end
+		local on_complete = state.params.on_complete
+		scan_states[state.params.type] = nil
 		do (on_complete or pass)() end
 	end
 
@@ -62,7 +66,9 @@ do
 end
 
 function get_query()
-	return get_state().params.queries[get_state().query_index]
+	local state = get_state()
+	if not state then return end
+	return state.params.queries[state.query_index]
 end
 
 function total_pages(total_auctions)
@@ -76,8 +82,10 @@ function last_page(total_auctions)
 end
 
 function scan()
-	get_state().query_index = get_state().query_index and get_state().query_index + 1 or 1
-	if get_query() and not get_state().stopped then
+	local state = get_state()
+	if not state then return end
+	state.query_index = state.query_index and state.query_index + 1 or 1
+	if get_query() and not state.stopped then
 		do (get_state().params.on_start_query or pass)(get_state().query_index) end
 		if get_query().blizzard_query then
 			if (get_query().blizzard_query.first_page or 0) <= (get_query().blizzard_query.last_page or aux.huge) then
@@ -116,8 +124,10 @@ do
 		return wait_for_results()
 	end
 	function submit_query()
-		if get_state().stopped then return end
-		if get_state().params.type ~= 'list' then
+		local state = get_state()
+		if not state then return end
+		if state.stopped then return end
+		if state.params.type ~= 'list' then
 			return submit()
 		else
 			return aux.when(CanSendAuctionQuery, submit)
@@ -126,6 +136,7 @@ do
 end
 
 function scan_page(i)
+	if not get_state() then return end
 	i = i or 1
 	local pages
 
@@ -169,6 +180,7 @@ function scan_page(i)
 end
 
 function wait_for_results()
+    if not get_state() then return end
     if get_state().params.type == 'bidder' then
         return aux.when(function() return aux.bids_loaded() end, accept_results)
     elseif get_state().params.type == 'owner' then
@@ -179,6 +191,7 @@ function wait_for_results()
 end
 
 function accept_results()
+	if not get_state() then return end
 	_,  get_state().total_auctions = GetNumAuctionItems(get_state().params.type)
 	do
 		(get_state().params.on_page_loaded or pass)(
@@ -191,6 +204,7 @@ function accept_results()
 end
 
 function wait_for_owner_results()
+    if not get_state() then return end
     if get_state().page == aux.current_owner_page() then
 	    return accept_results()
     else
@@ -201,6 +215,7 @@ function wait_for_owner_results()
 end
 
 function wait_for_list_results()
+    if not get_state() then return end
     local updated, last_update
     local listener_id = aux.event_listener('AUCTION_ITEM_LIST_UPDATE', function()
         last_update = GetTime()
